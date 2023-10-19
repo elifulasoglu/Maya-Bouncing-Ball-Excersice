@@ -1,0 +1,131 @@
+"""
+Bouncing Ball Tool for Maya.
+Written by Elif Ulasoglu
+Written for Python 3 and Maya 2022 and beyond
+"""
+
+import maya.cmds as cmds
+
+
+def set_scale_keyframes(obj, attributes, values, frame):
+    """
+    Set keyframes for multiple scale attributes of an object in Maya.
+
+    Args:
+        obj (str): Name of the object to set keyframes for.
+        attributes (list): List of attribute names (e.g., ["scaleX", "scaleY", "scaleZ"]).
+        values (list): List of values corresponding to the attributes.
+        frame (int): The frame number where the keyframe should be set.
+    """
+    for attr, value in zip(attributes, values):
+        cmds.setKeyframe(obj, attribute=attr, value=value, t=frame)
+
+
+def bouncing_ball_tool():
+    """
+    Creates the UI for the Bouncing Ball Tool in Maya.
+
+    Displays fields for setting parameters like start height, number of bounces,
+    bounce decay, squash & stretch amount, start frame, and end frame.
+    """
+    if cmds.window("bouncingBallWindow", exists=True):
+        cmds.deleteUI("bouncingBallWindow")
+
+    # Create the UI Window
+    cmds.window("bouncingBallWindow", title="Bouncing Ball Tool", widthHeight=(300, 250))
+    cmds.columnLayout(adjustableColumn=True, columnOffset=("both", 10))
+
+    cmds.text(label="Start Height")
+    start_height_field = cmds.floatField(value=10.0)
+
+    cmds.text(label="Number of Bounces")
+    num_bounces_field = cmds.intField(value=3)
+
+    cmds.text(label="Bounce Decay")
+    bounce_decay_field = cmds.floatField(value=0.5)
+
+    cmds.text(label="Squash & Stretch Amount")
+    squash_stretch_field = cmds.floatField(value=0.2)
+
+    cmds.text(label="Start Frame")
+    start_frame_field = cmds.intField(value=1)
+
+    cmds.text(label="End Frame")
+    end_frame_field = cmds.intField(value=120)
+
+    cmds.button(label="Animate Bouncing Ball", command=lambda x: _animate_bouncing_ball(
+        cmds.floatField(start_height_field, query=True, value=True),
+        cmds.intField(num_bounces_field, query=True, value=True),
+        cmds.floatField(bounce_decay_field, query=True, value=True),
+        cmds.floatField(squash_stretch_field, query=True, value=True),
+        cmds.intField(start_frame_field, query=True, value=True),
+        cmds.intField(end_frame_field, query=True, value=True)
+    ))
+
+    cmds.showWindow()
+
+
+def _animate_bouncing_ball(start_height, num_bounces, bounce_decay, squash_stretch, start_frame, end_frame):
+    """
+    Animates a bouncing ball in Maya based on the given parameters.
+
+    Args:
+        start_height (float): Initial height of the ball before the first drop.
+        num_bounces (int): Number of bounces the ball will make.
+        bounce_decay (float): Factor by which the bounce height reduces with each bounce.
+        squash_stretch (float): Amount of squash and stretch during the bounce.
+        start_frame (int): Frame at which the animation starts.
+        end_frame (int): Frame at which the animation ends.
+
+    Raises:
+        Warning: If the end frame is less than or equal to the start frame.
+        Warning: If the animation exceeds the specified frame range.
+    """
+    if end_frame <= start_frame:
+        cmds.warning("End frame should be greater than start frame.")
+        return
+
+    # Adjusting the total_frames_required calculation:
+    total_frames_required = 0
+    temp_height = start_height
+    for i in range(num_bounces):
+        fall_time = (2 * temp_height / 10) ** 0.5
+        total_frames_required += fall_time
+        temp_height *= bounce_decay
+        rise_time = (2 * temp_height / 10) ** 0.5
+        total_frames_required += rise_time
+
+    # Check if the animation fits in the specified range
+    if start_frame + total_frames_required > end_frame:
+        cmds.warning(
+            "Animation exceeds specified frame range. Consider increasing the end frame or reducing bounces/height.")
+        return
+
+    ball = cmds.polySphere(radius=1, name="bouncingBall")[0]
+
+    # Set initial keyframes
+    set_scale_keyframes(ball, ["scaleX", "scaleY", "scaleZ"], [1, 1, 1], start_frame)
+    cmds.setKeyframe(ball, attribute="translateY", value=start_height, t=start_frame)
+
+    time = 0
+    height = start_height
+
+    for i in range(num_bounces):
+        # Fall time using kinematics equation: t = sqrt(2h/g)
+        fall_time = (2 * height / 10) ** 0.5
+        time += fall_time
+
+        cmds.setKeyframe(ball, attribute="translateY", value=0, t=start_frame + time)
+        set_scale_keyframes(ball, ["scaleX", "scaleY", "scaleZ"],
+                            [1 + squash_stretch / 2, 1 - squash_stretch, 1 + squash_stretch / 2], start_frame + time)
+
+        height *= bounce_decay
+        rise_time = (2 * height / 10) ** 0.5  # Calculate the time for the ball to rise back up
+        time += rise_time
+
+        cmds.setKeyframe(ball, attribute="translateY", value=height, t=start_frame + time)
+        set_scale_keyframes(ball, ["scaleX", "scaleY", "scaleZ"], [1, 1, 1], start_frame + time)
+
+
+# Run the tool
+bouncing_ball_tool()
